@@ -1,27 +1,38 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE TupleSections #-}
 
 module Change (findFewestCoins) where
 
-import Control.Monad.Memo
+import Data.Array
+import Data.Array.MArray
+import Data.Array.ST
+import Data.Foldable
+import Data.Functor
 import Data.Function
-import Data.Maybe
 import Data.List.Extra
+import Data.Maybe
 
 findFewestCoins :: Integer -> [Integer] -> Maybe [Integer]
-findFewestCoins target coins = listToMaybe $ startEvalMemo
-  $ findFewestCoins' target coins
+findFewestCoins target coins
+  | target < 0 = Nothing
+  | otherwise = listToMaybe $ runSTArray (makeChange target coins) ! target
 
-findFewestCoins' :: Integer -> [Integer]
-  -> Memo (Integer, [Integer]) [[Integer]] [[Integer]]
-findFewestCoins' 0 _ = return [[]]
-findFewestCoins' _ [] = return []
-findFewestCoins' target coins@(c:cs) =
-  if target < c
-  then return []
-  else do
-    x <- fmap (c:) <$> for2 memo findFewestCoins' (target - c) coins
-    y <- for2 memo findFewestCoins' target cs
-    return $ headDef [] $ groupOn length $ mergeBy (on compare length) x y
+makeChange :: MArray a [[Integer]] m
+  => Integer -> [Integer] -> m (a Integer [[Integer]])
+makeChange target coins = do
+  z <- newArray (0, target) []
+  foldrM f z (sort coins)
+  where
+    f :: MArray a [[Integer]] m
+      => Integer -> a Integer [[Integer]] -> m (a Integer [[Integer]])
+    f coin a =
+      (getAssocs a >>= mapM_ (\(i, e) -> g i e >>= writeArray a i)) $> a
+      where
+        g 0 _ = return [[]]
+        g total withoutCoin =
+          if total < coin
+          then return withoutCoin
+          else do
+            withCoin <- fmap (coin:) <$> readArray a (total - coin)
+            return $ headDef [] $ groupOn length
+              $ mergeBy (on compare length) withCoin withoutCoin
