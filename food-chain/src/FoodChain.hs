@@ -5,8 +5,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 module FoodChain (song) where
 
+import Control.Applicative
+import Control.Arrow
 import Control.Lens
-import Data.Functor.Foldable
 import Data.List
 import qualified Data.List.NonEmpty as L
 
@@ -53,22 +54,18 @@ formatPreamble Verse { .. } =
     else maybe "" (++ "\n") _comment)
 
 formatSubsequent :: [Verse] -> String
-formatSubsequent = zygo verseAlg songAlg
+formatSubsequent = snd . foldr (liftA2 (&&&) verseAlg songAlg) (Nothing, "")
   where
-    verseAlg = \case
-      Nil -> Nothing
-      Cons verse _ -> Just verse
-    songAlg = \case
-      Nil -> ""
-      Cons Verse { _animal } (nextVerse, rest) ->
-        (maybe (
-          "I don't know why she swallowed the " ++ _animal
-          ++ ". Perhaps she'll die.\n"
-          ) (\Verse { _animal = next, _misc } ->
-            "She swallowed the " ++ _animal ++ " to catch the " ++ next
-            ++ maybe "" (' ':) _misc ++ ".\n"
-          ) $ nextVerse
-        ) ++ rest
+    verseAlg verse _ = Just verse
+    songAlg Verse { _animal } (nextVerse, rest) =
+      (maybe (
+        "I don't know why she swallowed the " ++ _animal
+        ++ ". Perhaps she'll die.\n"
+        ) (\Verse { _animal = next, _misc } ->
+          "She swallowed the " ++ _animal ++ " to catch the " ++ next
+          ++ maybe "" (' ':) _misc ++ ".\n"
+        ) $ nextVerse
+      ) ++ rest
 
 formatStanza :: Stanza -> String
 formatStanza = \case
