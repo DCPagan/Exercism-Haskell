@@ -27,9 +27,17 @@ toKnapsack :: [(Int, Int)] -> Knapsack
 toKnapsack =
   S.fromList . zipWith (\_serial (_weight, _value) -> Item { .. }) (enumFrom 0)
 
+maximumWeight :: Int -> Knapsack -> Int
+maximumWeight n = min n . sumOf (folded . weight)
+
 maximumValue :: Int -> [(Int, Int)] -> Int
-maximumValue capacity items = sumOf (ix capacity . folded . value)
-  $ runSTArray (knapsack capacity $ toKnapsack items)
+maximumValue capacity items
+  | sumOf (folded . _1) items <= capacity = sumOf (folded . _2) items
+  | otherwise = sumOf (ix n . folded . value)
+    $ runSTArray $ knapsack n k
+    where
+      k = toKnapsack items
+      n = maximumWeight capacity k
 
 knapsack :: MArray a Knapsack m
   => Int -> Knapsack -> m (a Int Knapsack)
