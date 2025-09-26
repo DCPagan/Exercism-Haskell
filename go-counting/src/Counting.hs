@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TupleSections #-}
@@ -54,8 +55,10 @@ type GoBoard = Array Coord (Tile Int)
 
 type RegionMap = IntMap (Set Coord, Maybe Color)
 
-_single :: (Cons s s a a, AsEmpty s) => Traversal' s a
-_single = _Cons . aside _Empty . _1
+_single :: Prism' [a] a
+_single = prism (:[]) $ \case
+  [x] -> Right x
+  xs -> Left xs
 
 toColor :: Char -> Maybe Color
 toColor 'B' = Just Black
@@ -213,7 +216,7 @@ flood board serial coord = do
             writeArray board coord (color, serial)
             adj <- toListOf (traverse . filteredBy (_2 . _1 . only color) . _1)
               <$> readAdjacents board coord
-            mconcat . (S.singleton coord :)
+            mconcat . (S.singleton coord:)
               <$> traverse (flood board serial) adj)
     else return empty
 
