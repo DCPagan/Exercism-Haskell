@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -18,21 +19,21 @@ import GHC.TypeLits
 import Data.Void
 import Data.Proxy (Proxy(..))
 
-type family (a :: Symbol) :**: (b :: Symbol) where
+type family (a :: Symbol) :**: (b :: Symbol) :: Symbol where
   "" :**: b = b
   a :**: "" = a
   a :**: b = AppendSymbol a (ConsSymbol ' ' b)
 
 infixr 6 :**:
 
-type family (a :: Symbol) :++: (b :: Symbol) where
+type family (a :: Symbol) :++: (b :: Symbol) :: Symbol where
   "" :++: b = b
   a :++: "" = a
   a :++: b = AppendSymbol a (ConsSymbol '\n' b)
 
 infixr 5 :++:
 
-type family Subject (n :: Nat) where
+type family Subject (n :: Natural) :: Symbol where
   Subject 0 = "the house"
   Subject 1 = "the malt"
   Subject 2 = "the rat"
@@ -45,9 +46,11 @@ type family Subject (n :: Nat) where
   Subject 9 = "the rooster"
   Subject 10 = "the farmer"
   Subject 11 = "the horse"
-  Subject _ = TypeError (Text "Invalid verse index")
+  Subject _ = TypeError (
+    Text "Invalid verse index." :$$:
+    Text "Verse index must precede 12.")
 
-type family Apposition (n :: Nat) where
+type family Apposition (n :: Natural) :: Symbol where
   Apposition 0 = "that Jack built"
   Apposition 1 = ""
   Apposition 2 = ""
@@ -60,9 +63,11 @@ type family Apposition (n :: Nat) where
   Apposition 9 = "that crowed in the morn"
   Apposition 10 = "sowing his corn"
   Apposition 11 = "and the hound and the horn"
-  Apposition _ = TypeError (Text "Invalid verse index")
+  Apposition _ = TypeError (
+    Text "Invalid verse index." :$$:
+    Text "Verse index must precede 12.")
 
-type family Subordinate (n :: Nat) where
+type family Subordinate (n :: Natural) :: Symbol where
   Subordinate 0 = ""
   Subordinate 1 = "that lay in"
   Subordinate 2 = "that ate"
@@ -75,138 +80,55 @@ type family Subordinate (n :: Nat) where
   Subordinate 9 = "that woke"
   Subordinate 10 = "that kept"
   Subordinate 11 = "that belonged to"
-  Subordinate _ = TypeError (Text "Invalid verse index")
+  Subordinate _ = TypeError (
+    Text "Invalid verse index." :$$:
+    Text "Verse index must precede 12.")
 
 type Preamble = "This is"
 
 type Coda = ".\n"
 
-type family Unnatural (n :: Natural) where
-  Unnatural 0 = 'Nothing
-  Unnatural n = 'Just (n - 1)
+type family Unnatural (n :: Natural) :: Maybe Natural where
+  Unnatural 0 = Nothing
+  Unnatural n = Just (n - 1)
 
-type family Verse (n :: Natural) where
+type family Verse (n :: Natural) :: Symbol where
   Verse n = Subject n :**: Apposition n :++: Subordinate n
 
-type family Verses' (n :: Maybe Natural) where
-  Verses' 'Nothing = ""
-  Verses' ('Just n) = Verse n :**: Verses' (Unnatural n)
+type family Verses' (n :: Maybe Natural) :: Symbol where
+  Verses' Nothing = ""
+  Verses' (Just n) = Verse n :**: Verses' (Unnatural n)
 
-type family Stanza' (n :: Maybe Natural) where
-  Stanza' 'Nothing = ""
+type family Stanza' (n :: Maybe Natural) :: Symbol where
+  Stanza' Nothing = ""
   Stanza' n = Preamble :**: AppendSymbol (Verses' n) Coda
 
-type family Song' (n :: Maybe Natural) where
-  Song' 'Nothing = ""
-  Song' ('Just n) = Song' (Unnatural n) :++: Stanza' ('Just n) 
+type family Song' (n :: Maybe Natural) :: Symbol where
+  Song' Nothing = ""
+  Song' (Just n) = Song' (Unnatural n) :++: Stanza' (Just n) 
 
+type SongLength :: Natural
 type SongLength = 12
 
-class (KnownNat n, n <= SongLength) => VerseIndex (n :: Natural) where
+class (KnownNat n) => VerseIndex (n :: Natural) where
   type Verses (n :: Natural) :: Symbol
-  type Verses n = Verses' (Unnatural n)
-
   type Stanza (n :: Natural) :: Symbol
-  type Stanza n = Stanza' (Unnatural n)
-
   type Song (n :: Natural) :: Symbol
+
+instance (KnownNat n, n <= SongLength) => VerseIndex n where
+  type Verses n = Verses' (Unnatural n)
+  type Stanza n = Stanza' (Unnatural n)
   type Song n = Song' (Unnatural n)
 
-instance (KnownNat n, n <= SongLength) => VerseIndex (n :: Natural)
+{-
+instance (KnownNat n, n > SongLength) => VerseIndex n where
+  type Verses n = TypeError (Text "Invalid number of verses; must precede 12.")
+  type Stanza n = TypeError (Text "Invalid stanza length; must precede 12.")
+  type Song n = TypeError (Text "Invalid song length; must precede 12.")
+-}
 
+type TheSong :: Symbol
 type TheSong = Song SongLength
 
 rhyme :: String
 rhyme = symbolVal $ Proxy @TheSong
-
-rhyme' :: String
-rhyme' =
-  "This is the house that Jack built.\n\
-        \\n\
-        \This is the malt\n\
-        \that lay in the house that Jack built.\n\
-        \\n\
-        \This is the rat\n\
-        \that ate the malt\n\
-        \that lay in the house that Jack built.\n\
-        \\n\
-        \This is the cat\n\
-        \that killed the rat\n\
-        \that ate the malt\n\
-        \that lay in the house that Jack built.\n\
-        \\n\
-        \This is the dog\n\
-        \that worried the cat\n\
-        \that killed the rat\n\
-        \that ate the malt\n\
-        \that lay in the house that Jack built.\n\
-        \\n\
-        \This is the cow with the crumpled horn\n\
-        \that tossed the dog\n\
-        \that worried the cat\n\
-        \that killed the rat\n\
-        \that ate the malt\n\
-        \that lay in the house that Jack built.\n\
-        \\n\
-        \This is the maiden all forlorn\n\
-        \that milked the cow with the crumpled horn\n\
-        \that tossed the dog\n\
-        \that worried the cat\n\
-        \that killed the rat\n\
-        \that ate the malt\n\
-        \that lay in the house that Jack built.\n\
-        \\n\
-        \This is the man all tattered and torn\n\
-        \that kissed the maiden all forlorn\n\
-        \that milked the cow with the crumpled horn\n\
-        \that tossed the dog\n\
-        \that worried the cat\n\
-        \that killed the rat\n\
-        \that ate the malt\n\
-        \that lay in the house that Jack built.\n\
-        \\n\
-        \This is the priest all shaven and shorn\n\
-        \that married the man all tattered and torn\n\
-        \that kissed the maiden all forlorn\n\
-        \that milked the cow with the crumpled horn\n\
-        \that tossed the dog\n\
-        \that worried the cat\n\
-        \that killed the rat\n\
-        \that ate the malt\n\
-        \that lay in the house that Jack built.\n\
-        \\n\
-        \This is the rooster that crowed in the morn\n\
-        \that woke the priest all shaven and shorn\n\
-        \that married the man all tattered and torn\n\
-        \that kissed the maiden all forlorn\n\
-        \that milked the cow with the crumpled horn\n\
-        \that tossed the dog\n\
-        \that worried the cat\n\
-        \that killed the rat\n\
-        \that ate the malt\n\
-        \that lay in the house that Jack built.\n\
-        \\n\
-        \This is the farmer sowing his corn\n\
-        \that kept the rooster that crowed in the morn\n\
-        \that woke the priest all shaven and shorn\n\
-        \that married the man all tattered and torn\n\
-        \that kissed the maiden all forlorn\n\
-        \that milked the cow with the crumpled horn\n\
-        \that tossed the dog\n\
-        \that worried the cat\n\
-        \that killed the rat\n\
-        \that ate the malt\n\
-        \that lay in the house that Jack built.\n\
-        \\n\
-        \This is the horse and the hound and the horn\n\
-        \that belonged to the farmer sowing his corn\n\
-        \that kept the rooster that crowed in the morn\n\
-        \that woke the priest all shaven and shorn\n\
-        \that married the man all tattered and torn\n\
-        \that kissed the maiden all forlorn\n\
-        \that milked the cow with the crumpled horn\n\
-        \that tossed the dog\n\
-        \that worried the cat\n\
-        \that killed the rat\n\
-        \that ate the malt\n\
-        \that lay in the house that Jack built.\n"
