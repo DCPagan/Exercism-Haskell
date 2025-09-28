@@ -46,9 +46,6 @@ type family Subject (n :: Natural) :: Symbol where
   Subject 9 = "the rooster"
   Subject 10 = "the farmer"
   Subject 11 = "the horse"
-  Subject _ = TypeError (
-    Text "Invalid verse index." :$$:
-    Text "Verse index must precede 12.")
 
 type family Apposition (n :: Natural) :: Symbol where
   Apposition 0 = "that Jack built"
@@ -63,9 +60,6 @@ type family Apposition (n :: Natural) :: Symbol where
   Apposition 9 = "that crowed in the morn"
   Apposition 10 = "sowing his corn"
   Apposition 11 = "and the hound and the horn"
-  Apposition _ = TypeError (
-    Text "Invalid verse index." :$$:
-    Text "Verse index must precede 12.")
 
 type family Subordinate (n :: Natural) :: Symbol where
   Subordinate 0 = ""
@@ -80,9 +74,6 @@ type family Subordinate (n :: Natural) :: Symbol where
   Subordinate 9 = "that woke"
   Subordinate 10 = "that kept"
   Subordinate 11 = "that belonged to"
-  Subordinate _ = TypeError (
-    Text "Invalid verse index." :$$:
-    Text "Verse index must precede 12.")
 
 type Preamble = "This is"
 
@@ -116,16 +107,15 @@ class (KnownNat n) => VerseIndex (n :: Natural) where
   type Song (n :: Natural) :: Symbol
 
 instance (KnownNat n, n <= SongLength) => VerseIndex n where
-  type Verses n = Verses' (Unnatural n)
-  type Stanza n = Stanza' (Unnatural n)
-  type Song n = Song' (Unnatural n)
-
-{-
-instance (KnownNat n, n > SongLength) => VerseIndex n where
-  type Verses n = TypeError (Text "Invalid number of verses; must precede 12.")
-  type Stanza n = TypeError (Text "Invalid stanza length; must precede 12.")
-  type Song n = TypeError (Text "Invalid song length; must precede 12.")
--}
+  type Verses n = If (n <=? SongLength)
+    (Verses' (Unnatural n))
+    (TypeError (Text "Invalid verse count; must precede 12."))
+  type Stanza n = If (n <=? SongLength)
+    (Stanza' (Unnatural n))
+    (TypeError (Text "Invalid stanza length; must precede 12."))
+  type Song n = If (n <=? SongLength)
+    (Song' (Unnatural n))
+    (TypeError (Text "Invalid song length; must precede 12."))
 
 type TheSong :: Symbol
 type TheSong = Song SongLength
