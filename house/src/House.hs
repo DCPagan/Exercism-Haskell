@@ -101,21 +101,23 @@ type family Song' (n :: Maybe Natural) :: Symbol where
 type SongLength :: Natural
 type SongLength = 12
 
-class (KnownNat n) => VerseIndex (n :: Natural) where
-  type Verses (n :: Natural) :: Symbol
-  type Stanza (n :: Natural) :: Symbol
-  type Song (n :: Natural) :: Symbol
-
-instance (KnownNat n, n <= SongLength) => VerseIndex n where
-  type Verses n = If (n <=? SongLength)
+type family Verses (n :: Natural) :: Symbol where
+  Verses n = If (n <=? SongLength)
     (Verses' (Unnatural n))
-    (TypeError (Text "Invalid verse count; must precede 12."))
-  type Stanza n = If (n <=? SongLength)
+    (TypeError (Text "Invalid verse count: " :<>: ShowType n :$$:
+      Text "It must precede 12."))
+
+type family Stanza (n :: Natural) :: Symbol where
+  Stanza n = If (n <=? SongLength)
     (Stanza' (Unnatural n))
-    (TypeError (Text "Invalid stanza length; must precede 12."))
-  type Song n = If (n <=? SongLength)
+    (TypeError (Text "Invalid stanza length: " :<>: ShowType n :$$:
+      Text "It must precede 12."))
+
+type family Song (n :: Natural) :: Symbol where
+  Song n = If (n <=? SongLength)
     (Song' (Unnatural n))
-    (TypeError (Text "Invalid song length; must precede 12."))
+    (TypeError (Text "Invalid song length: " :<>: ShowType n :$$:
+      Text "It must precede 12."))
 
 type TheSong :: Symbol
 type TheSong = Song SongLength
