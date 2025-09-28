@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -101,7 +102,7 @@ type family Song' (n :: Maybe Natural) where
 
 type SongLength = 12
 
-class (KnownNat n, n <= SongLength) => VerseIndex n where
+class (KnownNat n, n <= SongLength) => VerseIndex (n :: Natural) where
   type Verses (n :: Natural) :: Symbol
   type Verses n = Verses' (Unnatural n)
 
@@ -111,7 +112,9 @@ class (KnownNat n, n <= SongLength) => VerseIndex n where
   type Song (n :: Natural) :: Symbol
   type Song n = Song' (Unnatural n)
 
-type TheSong = Song' (Unnatural SongLength)
+instance (KnownNat n, n <= SongLength) => VerseIndex (n :: Natural)
+
+type TheSong = Song SongLength
 
 rhyme :: String
 rhyme = symbolVal $ Proxy @TheSong
