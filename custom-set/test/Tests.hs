@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
 
 import CustomSet
@@ -13,9 +14,11 @@ import CustomSet
   , null
   , size
   , toList
-  , union
+  , union)
 
     -- Red-Black tree properties
+import RedBlackTree
+  ( isBlack
   , orderRule
   , redRule
   , blackRule
@@ -29,10 +32,6 @@ import Test.Hspec (Spec, describe, it, shouldBe)
 import Test.Hspec.Runner (configFailFast, defaultConfig, hspecWith)
 import Test.QuickCheck
 
-instance (Arbitrary a, Ord a)
-  => Arbitrary (CustomSet a) where
-  arbitrary = fromList <$> arbitrary
-
 main :: IO ()
 main = hspecWith defaultConfig { configFailFast = True } specs
 
@@ -40,10 +39,11 @@ specs :: Spec
 specs = do
   describe "standard tests" $ do
     describe "Red-Black tree properties" $ do
-      it "Order rule" $ forAll arbitrary orderRule
-      it "Red rule" $ forAll arbitrary redRule
-      it "Black rule" $ forAll arbitrary blackRule
-      it "Height rule" $ forAll arbitrary heightRule
+      it "Root is black" $ forAll arbitrary $ isBlack @Integer
+      it "Order rule" $ forAll arbitrary $ orderRule @Integer
+      it "Red rule" $ forAll arbitrary $ redRule @Integer
+      it "Black rule" $ forAll arbitrary $ blackRule @Integer
+      it "Height rule" $ forAll arbitrary $ heightRule @Integer
 
     describe "null" $ do
       it "sets with no elements are empty" $

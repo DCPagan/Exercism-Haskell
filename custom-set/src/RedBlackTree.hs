@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
@@ -29,11 +30,11 @@ import Data.Kind (Type)
 import Data.List (intercalate, uncons)
 import Data.Monoid (All(..), Endo(..))
 
+import GHC.Generics
+
 import Numeric.Natural (Natural)
 
 import Recursion
-
-import Test.QuickCheck (Arbitrary(..))
 
 {-|
   Red-black tree
@@ -42,7 +43,7 @@ import Test.QuickCheck (Arbitrary(..))
 -}
 data RBNode a b where
   RBNode :: { _tleft :: b, _tval :: a, _tright :: b } -> RBNode a b
-  deriving (Eq, Functor, Foldable, Traversable)
+  deriving (Eq, Functor, Foldable, Generic, Traversable)
 
 makeLenses ''RBNode
 
@@ -75,7 +76,7 @@ data RBTreeF a b where
   RBNilF :: RBTreeF a b
   RNodeF :: RBNode a b -> RBTreeF a b
   BNodeF :: RBNode a b -> RBTreeF a b
-  deriving (Functor, Foldable, Traversable)
+  deriving (Functor, Foldable, Generic, Traversable)
 
 makePrisms ''RBTreeF
 
@@ -116,6 +117,7 @@ data CustomSet a where
   RBNil :: CustomSet a
   RNode :: RBNode a (CustomSet a) -> CustomSet a
   BNode :: RBNode a (CustomSet a) -> CustomSet a
+  deriving Generic
 
 makePrisms ''CustomSet
 
@@ -160,9 +162,6 @@ instance (Show a, Show b) => Show (RBTreeF a b) where
       "R(" ++ show _tleft ++ "," ++ show _tval ++ "," ++ show _tright ++ ")"
     BNodeF RBNode {..} ->
       "B(" ++ show _tleft ++ "," ++ show _tval ++ "," ++ show _tright ++ ")"
-
-instance (Eq a) => Eq (CustomSet a) where
-  (==) = on (==) project
 
 instance (Show a) => Show (CustomSet a) where
   show = cata format
@@ -214,6 +213,35 @@ blackHeight = cata $ \case
   BNodeF RBNode {..} -> succ $ max _tleft _tright
 
 {-|
+  The elements are ordered.
+-}
+orderRule :: (Ord a) => CustomSet a -> Bool
+orderRule = zygo minMax testOrder
+  where
+    minMax :: RBTreeF a (Maybe (a, a)) -> Maybe (a, a)
+    minMax = \case
+      RBNilF -> Nothing
+      RNodeF n -> minMax' n
+      BNodeF n -> minMax' n
+      where
+        minMax' :: RBNode a (Maybe (a, a)) -> Maybe (a, a)
+        minMax'
+          RBNode {..} = Just (maybe _tval fst _tleft, maybe _tval snd _tright)
+
+    testOrder :: (Ord a) => RBTreeF a (Maybe (a, a), Bool) -> Bool
+    testOrder = \case
+      RBNilF -> True
+      RNodeF x -> testNode x
+      BNodeF x -> testNode x
+      where
+        testNode :: (Ord a) => RBNode a (Maybe (a, a), Bool) -> Bool
+        testNode RBNode {..} = liftEq2 isOrdered (&&) _tleft _tright
+          where
+            isOrdered a b =
+              maybe True ((<= _tval) . snd) a
+              && maybe True ((_tval <=) . fst) b
+
+{-|
   No red node has a red child.
 -}
 redRule :: CustomSet a -> Bool
@@ -235,6 +263,7 @@ blackRule = zygo (count @Natural) testBlack
       RBNilF -> 1
       RNodeF RBNode {..} -> max _tleft _tright
       BNodeF RBNode {..} -> succ $ max _tleft _tright
+
     testBlack :: (Integral b) => RBTreeF a (b, Bool) -> Bool
     testBlack = \case
       RBNilF -> True
@@ -244,31 +273,6 @@ blackRule = zygo (count @Natural) testBlack
         testNode RBNode {..} = liftEq2 (==) (&&) _tleft _tright
 
 {-|
-  The elements are ordered.
--}
-orderRule :: (Ord a) => CustomSet a -> Bool
-orderRule = zygo get testOrder
-  where
-    get :: RBTreeF a (Maybe a) -> Maybe a
-    get = \case
-      RBNilF -> Nothing
-      RNodeF RBNode {..} -> Just _tval
-      BNodeF RBNode {..} -> Just _tval
-    testOrder :: (Ord a) => RBTreeF a (Maybe a, Bool) -> Bool
-    testOrder = \case
-      RBNilF -> True
-      RNodeF x -> testNode x
-      BNodeF x -> testNode x
-      where
-        testNode :: (Ord a) => RBNode a (Maybe a, Bool) -> Bool
-        testNode RBNode {..} =
-          liftEq2
-            (\a b -> a <= Just _tval && Just _tval <= b)
-            (&&)
-            _tleft
-            _tright
-
-{-|
   The length of the longest path precedes double that of the shortest.
 -}
 heightRule :: CustomSet a -> Bool
@@ -276,13 +280,16 @@ heightRule = zygo (heights @Natural) testHeights
   where
     getHeights :: (Integral b, Ord b) => RBNode a (b, b) -> (b, b)
     getHeights RBNode {..} = succ *** succ $ biliftA2 min max _tleft _tright
+
     heights :: (Integral b, Ord b) => RBTreeF a (b, b) -> (b, b)
     heights = \case
       RBNilF -> (1, 1)
       RNodeF x -> getHeights x
       BNodeF x -> getHeights x
+
     testNode :: (Integral b, Ord b) => RBNode a ((b, b), Bool) -> Bool
     testNode = uncurry (>=) . first (2 *) . getHeights . second fst
+
     testHeights :: (Integral b, Ord b) => RBTreeF a ((b, b), Bool) -> Bool
     testHeights = \case
       RBNilF -> True

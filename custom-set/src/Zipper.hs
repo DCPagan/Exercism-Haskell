@@ -63,7 +63,7 @@ data RBZipF a b where
 data RBZip a where
   RBZip :: { _direction :: Direction, _val :: a, _sibling :: CustomSet a }
     -> RBZip a
-  deriving (Eq, Show)
+  deriving (Show)
 
 makeLenses ''RBZip
 
@@ -71,7 +71,7 @@ type RBZipper a = [RBZip a]
 
 data RBFocus a where
   RBFocus :: { _rbtree :: CustomSet a, _zipper :: RBZipper a } -> RBFocus a
-  deriving (Eq, Show)
+  deriving (Show)
 
 type RBFocusM a = StateT (RBFocus a)
 

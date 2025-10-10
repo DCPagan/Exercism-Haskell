@@ -10,7 +10,10 @@ dependencies:
   - mtl
 
 library:
-  exposed-modules: CustomSet
+  exposed-modules:
+    - CustomSet
+    - RedBlackTree
+    - Zipper
   source-dirs: src
   ghc-options: -Wall
   # dependencies:
