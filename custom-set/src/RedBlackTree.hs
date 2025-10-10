@@ -42,7 +42,7 @@ import Test.QuickCheck (Arbitrary(..))
 -}
 data RBNode a b where
   RBNode :: { _tleft :: b, _tval :: a, _tright :: b } -> RBNode a b
-  deriving (Show, Functor, Foldable, Traversable)
+  deriving (Eq, Functor, Foldable, Traversable)
 
 makeLenses ''RBNode
 
@@ -67,8 +67,9 @@ instance Eq2 RBNode where
 instance (Eq a) => Eq1 (RBNode a) where
   liftEq = liftEq2 (==)
 
-instance (Eq a, Eq b) => Eq (RBNode a b) where
-  (==) = liftEq (==)
+instance (Show a, Show b) => Show (RBNode a b) where
+  show RBNode {..} =
+    "[" ++ show _tleft ++ "," ++ show _tval ++ "," ++ show _tright ++ "]"
 
 data RBTreeF a b where
   RBNilF :: RBTreeF a b
@@ -119,12 +120,24 @@ data CustomSet a where
 makePrisms ''CustomSet
 
 _rbnode :: Prism'
-    (CustomSet b)
-    (Either (RBNode b (CustomSet b)) (RBNode b (CustomSet b)))
+    (CustomSet a)
+    (Either (RBNode a (CustomSet a)) (RBNode a (CustomSet a)))
 _rbnode = prism' (either RNode BNode) $ \case
   RBNil -> Nothing
   RNode n -> Just $ Left n
   BNode n -> Just $ Right n
+
+_rbBlack :: Prism' (CustomSet a) (Maybe (RBNode a (CustomSet a)))
+_rbBlack = prism' (maybe RBNil BNode) $ \case
+  RBNil -> Just Nothing
+  RNode _ -> Nothing
+  BNode x -> Just $ Just x
+
+rbLeft :: Traversal' (CustomSet b) (CustomSet b)
+rbLeft = _rbnode . chosen . tleft
+
+rbRight :: Traversal' (CustomSet b) (CustomSet b)
+rbRight = _rbnode . chosen . tright
 
 type instance Base (CustomSet a) = RBTreeF a
 
@@ -152,16 +165,16 @@ instance (Eq a) => Eq (CustomSet a) where
   (==) = on (==) project
 
 instance (Show a) => Show (CustomSet a) where
-  show = ('[':) . (++ "]") . cata format
+  show = cata format
     where
       format :: (Show a) => RBTreeF a String -> String
       format = \case
-        RBNilF -> ""
-        RNodeF x -> formatNode x
-        BNodeF x -> formatNode x
+        RBNilF -> "nil"
+        RNodeF x -> "R" ++ formatNode x
+        BNodeF x -> "B" ++ formatNode x
         where
-          formatNode
-            RBNode {..} = intercalate "," [_tleft, show _tval, _tright]
+          formatNode RBNode {..} =
+            "[" ++ intercalate "," [_tleft, show _tval, _tright] ++ "]"
 
 {-|
   Only strictly increasing functions can be mapped over an ordered structure.
@@ -181,6 +194,18 @@ isRed _ = False
 isBlack :: CustomSet a -> Bool
 isBlack RNode {} = False
 isBlack _ = True
+
+makeBlack :: CustomSet a -> CustomSet a
+makeBlack = \case
+  RBNil -> RBNil
+  RNode n -> BNode n
+  BNode n -> BNode n
+
+makeRed :: CustomSet a -> CustomSet a
+makeRed = \case
+  RBNil -> RBNil
+  RNode n -> RNode n
+  BNode n -> RNode n
 
 blackHeight :: CustomSet a -> Natural
 blackHeight = cata $ \case
