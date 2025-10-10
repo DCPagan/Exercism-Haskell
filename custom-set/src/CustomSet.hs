@@ -206,8 +206,9 @@ delete x = makeBlack . evalState (del x) . makeFocus
 
     {-|
       Based on `RB-DELETE-FIXUP` from the CLRS chapter which treats red-black
-      trees, except with a zipper instead of parent references, and monadic
-      lenses instead of updating pointers all the time.
+      trees, except with a zipper instead of parent references, monadic lenses
+      instead of updating pointers all the time, and tail recursion instead of
+      a while loop.
     -}
     balance :: (Monad m) => RBFocusM a m (CustomSet a)
     balance = do
@@ -221,8 +222,8 @@ delete x = makeBlack . evalState (del x) . makeFocus
           Nothing -> unzipFocus
           Just RBZip {..} -> case _direction of
             Left _ -> do
+              goUp
               when (isRed _sibling) $ do
-                goUp
                 rbtree %= (rbRight %~ makeBlack >>> makeRed >>> leftRotate)
                 goLeft
               rightSibling <- use $ rbtree . singular rbRight
@@ -244,8 +245,8 @@ delete x = makeBlack . evalState (del x) . makeFocus
                              >>> leftRotate)
                   unzipFocus
             Right _ -> do
+              goUp
               when (isRed _sibling) $ do
-                goUp
                 rbtree %= (rbLeft %~ makeBlack >>> makeRed >>> rightRotate)
                 goRight
               leftSibling <- use $ rbtree . singular rbLeft
