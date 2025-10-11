@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
@@ -149,6 +150,34 @@ size = cata size'
     nodeSize :: (Integral b) => RBNode a b -> b
     nodeSize RBNode { .. } = _tleft + _tright + 1
 
+leftRotate :: CustomSet a -> CustomSet a
+leftRotate = \case
+  RBNil -> RBNil
+  RNode x@RBNode { _tright = RBNil } -> RNode x
+  RNode x@RBNode { _tright = RNode y@RBNode { .. } } ->
+    RNode y { _tleft = RNode x { _tright = _tleft } }
+  RNode x@RBNode { _tright = BNode y@RBNode { .. } } ->
+    BNode y { _tleft = RNode x { _tright = _tleft } }
+  BNode x@RBNode { _tright = RBNil } -> BNode x
+  BNode x@RBNode { _tright = RNode y@RBNode { .. } } ->
+    RNode y { _tleft = BNode x { _tright = _tleft } }
+  BNode x@RBNode { _tright = BNode y@RBNode { .. } } ->
+    BNode y { _tleft = BNode x { _tright = _tleft } }
+
+rightRotate :: CustomSet a -> CustomSet a
+rightRotate = \case
+  RBNil -> RBNil
+  RNode y@RBNode { _tleft = RBNil } -> RNode y
+  RNode y@RBNode { _tleft = RNode x@RBNode { .. } } ->
+    RNode x { _tright = RNode y { _tleft = _tright } }
+  RNode y@RBNode { _tleft = BNode x@RBNode { .. } } ->
+    BNode x { _tright = RNode y { _tleft = _tright } }
+  BNode y@RBNode { _tleft = RBNil } -> BNode y
+  BNode y@RBNode { _tleft = RNode x@RBNode { .. } } ->
+    RNode x { _tright = BNode y { _tleft = _tright } }
+  BNode y@RBNode { _tleft = BNode x@RBNode { .. } } ->
+    BNode x { _tright = BNode y { _tleft = _tright } }
+
 delete :: (Ord a) => a -> CustomSet a -> CustomSet a
 delete x = makeBlack . evalState (del x) . makeFocus
   where
@@ -166,26 +195,23 @@ delete x = makeBlack . evalState (del x) . makeFocus
       -> RBNode a (CustomSet a)
       -> RBFocusM a m (CustomSet a)
     del' RBFocus { .. } RBNode { .. } = do
-      deleted <- if null _tleft
-        then do
+      deleted <- if
+        | null _tleft -> do
           rbtree .= _tright
           return _rbtree
-        else if null _tright
-          then do
-            rbtree .= _tleft
-            return _rbtree
-          else do
-            goRight
-            sweepLeft
-            down <- use rbtree
-            case down ^? _rbnode . chosen of
-              Nothing -> return down
-              Just RBNode { .. } -> do
-                zipper . _last . val .= _tval
-                extendZipper _zipper
-                rbtree .= _tright
-                return down
-      if is _BNode deleted || null deleted
+        | null _tright -> do
+          rbtree .= _tleft
+          return _rbtree
+        | otherwise -> do
+          goRight
+          sweepLeft
+          delendum <- use rbtree
+          let RBNode { .. } = delendum ^. singular _rbnode . chosen
+          zipper . _last . val .= _tval
+          rbtree .= _tright
+          extendZipper _zipper
+          return delendum
+      if isBlack deleted
         then balance
         else unzipFocus
 
@@ -197,87 +223,57 @@ delete x = makeBlack . evalState (del x) . makeFocus
     -}
     balance :: (Monad m) => RBFocusM a m (CustomSet a)
     balance = do
-      RBFocus { .. } <- get
-      if isRed _rbtree
-        then 
-          -- |Red node: change the color to black and exit.
-          rbtree %= makeBlack >> unzipFocus
-        else case _zipper ^? _head of
-          -- |Top of the tree.
-          Nothing -> unzipFocus
-          Just RBZip { .. } -> goUp >> case _direction of
-            Left _ -> do
-              when (isRed _sibling) $ do
-                rbtree %= (rbRight %~ makeBlack >>> makeRed >>> leftRotate)
-                goLeft
-              rightSibling <- use $ rbtree . singular rbRight
-              if isBlack (rightSibling ^. singular rbLeft) && isBlack
-                (rightSibling ^. singular rbRight)
-                then do
-                  rbtree . rbRight %= makeRed
-                  balance
-                else do
-                  when (isBlack $ rightSibling ^. singular rbRight) $ do
-                    rbtree . rbRight
-                      %= (rbLeft %~ makeBlack >>> makeRed >>> rightRotate)
-                  tree <- use rbtree
-                  let color =
-                        if isRed tree
-                          then makeRed
-                          else makeBlack
-                  rbtree %= (rbRight %~ color >>> rbRight . rbRight %~ makeBlack
-                             >>> leftRotate)
-                  unzipFocus
-            Right _ -> do
-              when (isRed _sibling) $ do
-                rbtree %= (rbLeft %~ makeBlack >>> makeRed >>> rightRotate)
-                goRight
-              leftSibling <- use $ rbtree . singular rbLeft
-              if isBlack (leftSibling ^. singular rbRight) && isBlack
-                (leftSibling ^. singular rbLeft)
-                then do
-                  rbtree . rbLeft %= makeRed
-                  balance
-                else do
-                  when (isBlack $ leftSibling ^. singular rbLeft) $ do
-                    rbtree . rbLeft
-                      %= (rbRight %~ makeBlack >>> makeRed >>> leftRotate)
-                  tree <- use rbtree
-                  let color =
-                        if isRed tree
-                          then makeRed
-                          else makeBlack
-                  rbtree %= (rbLeft %~ color >>> rbLeft . rbLeft %~ makeBlack
-                             >>> rightRotate)
-                  unzipFocus
-
-    leftRotate :: CustomSet a -> CustomSet a
-    leftRotate = \case
-      RBNil -> RBNil
-      RNode x@RBNode { _tright = RBNil } -> RNode x
-      RNode x@RBNode { _tright = RNode y@RBNode { .. } } ->
-        RNode y { _tleft = RNode x { _tright = _tleft } }
-      RNode x@RBNode { _tright = BNode y@RBNode { .. } } ->
-        BNode y { _tleft = RNode x { _tright = _tleft } }
-      BNode x@RBNode { _tright = RBNil } -> RNode x
-      BNode x@RBNode { _tright = RNode y@RBNode { .. } } ->
-        RNode y { _tleft = BNode x { _tright = _tleft } }
-      BNode x@RBNode { _tright = BNode y@RBNode { .. } } ->
-        BNode y { _tleft = BNode x { _tright = _tleft } }
-
-    rightRotate :: CustomSet a -> CustomSet a
-    rightRotate = \case
-      RBNil -> RBNil
-      RNode y@RBNode { _tleft = RBNil } -> RNode y
-      RNode y@RBNode { _tleft = RNode x@RBNode { .. } } ->
-        RNode x { _tright = RNode y { _tleft = _tright } }
-      RNode y@RBNode { _tleft = BNode x@RBNode { .. } } ->
-        BNode x { _tright = RNode y { _tleft = _tright } }
-      BNode y@RBNode { _tleft = RBNil } -> RNode y
-      BNode y@RBNode { _tleft = RNode x@RBNode { .. } } ->
-        RNode x { _tright = BNode y { _tleft = _tright } }
-      BNode y@RBNode { _tleft = BNode x@RBNode { .. } } ->
-        BNode x { _tright = BNode y { _tleft = _tright } }
+      focus <- get
+      case focus of
+        -- |Red node: change the color to black and exit.
+        RBFocus { _rbtree = RNode _ } -> rbtree %= makeBlack >> unzipFocus
+        -- |Top of the tree.
+        RBFocus { _zipper = [], .. } -> return _rbtree
+        RBFocus { _zipper = RBZip { .. }:_, .. } -> goUp >> case _direction of
+          Left _ -> do
+            when (isRed _sibling) $ do
+              rbtree %= (rbRight %~ makeBlack >>> makeRed >>> leftRotate)
+              goLeft
+            sibling' <- use $ rbtree . singular rbRight
+            if has (rbLeft . filtered isBlack) sibling' &&
+              has (rbRight . filtered isBlack) sibling'
+              then do
+                rbtree . rbRight %= makeRed
+                balance
+              else do
+                when (has (rbRight . filtered isBlack) sibling') $
+                  rbtree . rbRight
+                    %= (rbLeft %~ makeBlack >>> makeRed >>> rightRotate)
+                tree <- use rbtree
+                let color = if isRed tree then makeRed else makeBlack
+                rbtree %=
+                  (makeBlack
+                    >>> rbRight %~ color
+                    >>> rbRight . rbRight %~ makeBlack
+                    >>> leftRotate)
+                unzipFocus
+          Right _ -> do
+            when (isRed _sibling) $ do
+              rbtree %= (rbLeft %~ makeBlack >>> makeRed >>> rightRotate)
+              goRight
+            sibling' <- use $ rbtree . singular rbLeft
+            if has (rbLeft . filtered isBlack) sibling' &&
+              has (rbRight . filtered isBlack) sibling'
+              then do
+                rbtree . rbLeft %= makeRed
+                balance
+              else do
+                when (has (rbLeft . filtered isBlack) sibling') $
+                  rbtree . rbLeft
+                    %= (rbRight %~ makeBlack >>> makeRed >>> leftRotate)
+                tree <- use rbtree
+                let color = if isRed tree then makeRed else makeBlack
+                rbtree %=
+                  (makeBlack
+                    >>> rbLeft %~ color
+                    >>> rbLeft . rbLeft %~ makeBlack
+                    >>> rightRotate)
+                unzipFocus
 
 fromList :: (Ord a) => [a] -> CustomSet a
 fromList = foldr insert empty
@@ -363,8 +359,7 @@ instance (Arbitrary a, Arbitrary b) => Arbitrary (RBNode a b) where
     _tval <- arbitrary
     _tright <- arbitrary
     return RBNode { .. }
-  shrink = recursivelyShrink
 
 instance (Arbitrary a, Ord a) => Arbitrary (CustomSet a) where
   arbitrary = fromList <$> arbitrary
-  shrink = recursivelyShrink
+  shrink = fmap makeBlack . recursivelyShrink

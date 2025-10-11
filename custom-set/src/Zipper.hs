@@ -81,7 +81,7 @@ _rbSibling :: Traversal' (RBFocus a) (CustomSet a)
 _rbSibling = zipper . _head . sibling
 
 instance Semigroup (RBFocus a) where
-  x <> RBFocus {..} = extendZipper' _zipper x
+  x <> RBFocus { .. } = extendZipper' _zipper x
 
 instance Monoid (RBFocus a) where
   mempty = RBFocus { _rbtree = RBNil, _zipper = [] }
@@ -96,32 +96,32 @@ makeFocus :: CustomSet a -> RBFocus a
 makeFocus _rbtree = RBFocus { _zipper = [], .. }
 
 goLeft' :: RBFocus a -> RBFocus a
-goLeft' x@RBFocus {..} = case _rbtree of
+goLeft' x@RBFocus { .. } = case _rbtree of
   RBNil -> x
-  RNode RBNode {..} -> RBFocus
+  RNode RBNode { .. } -> RBFocus
     { _rbtree = _tleft, _zipper = RBZip (Left Red) _tval _tright:_zipper }
-  BNode RBNode {..} -> RBFocus
+  BNode RBNode { .. } -> RBFocus
     { _rbtree = _tleft, _zipper = RBZip (Left Black) _tval _tright:_zipper }
 
 goLeft :: (Monad m) => RBFocusM a m ()
 goLeft = modify goLeft'
 
 goRight' :: RBFocus a -> RBFocus a
-goRight' x@RBFocus {..} = case _rbtree of
+goRight' x@RBFocus { .. } = case _rbtree of
   RBNil -> x
-  RNode RBNode {..} -> RBFocus
+  RNode RBNode { .. } -> RBFocus
     { _rbtree = _tleft, _zipper = RBZip (Right Red) _tval _tright:_zipper }
-  BNode RBNode {..} -> RBFocus
+  BNode RBNode { .. } -> RBFocus
     { _rbtree = _tleft, _zipper = RBZip (Right Black) _tval _tright:_zipper }
 
 goRight :: (Monad m) => RBFocusM a m ()
 goRight = modify goRight'
 
 up :: CustomSet a -> RBZip a -> CustomSet a
-up _tleft (RBZip (Left Red) _tval _tright) = RNode RBNode { .. }
-up _tleft (RBZip (Left Black) _tval _tright) = BNode RBNode { .. }
-up _tright (RBZip (Right Red) _tval _tleft) = RNode RBNode { .. }
-up _tright (RBZip (Right Black) _tval _tleft) = BNode RBNode { .. }
+up _tright (RBZip (Left Red) _tval _tleft) = RNode RBNode { .. }
+up _tright (RBZip (Left Black) _tval _tleft) = BNode RBNode { .. }
+up _tleft (RBZip (Right Red) _tval _tright) = RNode RBNode { .. }
+up _tleft (RBZip (Right Black) _tval _tright) = BNode RBNode { .. }
 
 goUp' :: RBFocus a -> RBFocus a
 goUp' x@RBFocus {_zipper = []} = x
@@ -132,25 +132,29 @@ goUp :: (Monad m) => RBFocusM a m ()
 goUp = modify goUp'
 
 unzipFocus' :: RBFocus a -> CustomSet a
-unzipFocus' RBFocus {..} = foldl' up _rbtree _zipper
+unzipFocus' RBFocus { .. } = foldl' up _rbtree _zipper
 
 unzipFocus :: (Monad m) => RBFocusM a m (CustomSet a)
 unzipFocus = gets unzipFocus'
 
 sweepLeft' :: RBFocus a -> RBFocus a
-sweepLeft' x@RBFocus {..} = case _rbtree of
+sweepLeft' x@RBFocus { .. } = case _rbtree of
   RBNil -> x
-  RNode RBNode {..} -> RBFocus
+  RNode RBNode { _tleft = RBNil } -> x
+  BNode RBNode { _tleft = RBNil } -> x
+  RNode RBNode { .. } -> sweepLeft' RBFocus
     { _rbtree = _tleft, _zipper = RBZip (Left Red) _tval _tright:_zipper }
-  BNode RBNode {..} -> RBFocus
+  BNode RBNode { .. } -> sweepLeft' RBFocus
     { _rbtree = _tleft, _zipper = RBZip (Left Black) _tval _tright:_zipper }
 
 sweepRight' :: RBFocus a -> RBFocus a
-sweepRight' x@RBFocus {..} = case _rbtree of
+sweepRight' x@RBFocus { .. } = case _rbtree of
   RBNil -> x
-  RNode RBNode {..} -> RBFocus
+  RNode RBNode { _tright = RBNil } -> x
+  BNode RBNode { _tright = RBNil } -> x
+  RNode RBNode { .. } -> sweepRight' RBFocus
     { _rbtree = _tright, _zipper = RBZip (Right Red) _tval _tleft:_zipper }
-  BNode RBNode {..} -> RBFocus
+  BNode RBNode { .. } -> sweepRight' RBFocus
     { _rbtree = _tright, _zipper = RBZip (Right Black) _tval _tleft:_zipper }
 
 sweepLeft :: (Monad m) => RBFocusM a m ()
@@ -162,9 +166,9 @@ sweepRight = modify sweepRight'
 zipperSearch' :: (Ord a) => a -> RBFocus a -> RBFocus a
 zipperSearch' x = fix f
   where
-    f g focus@RBFocus {..} = case _rbtree of
+    f g focus@RBFocus { .. } = case _rbtree of
       RBNil -> focus
-      RNode RBNode {..} -> case compare x _tval of
+      RNode RBNode { .. } -> case compare x _tval of
         LT -> g
           RBFocus { _rbtree = _tleft
                   , _zipper = RBZip (Left Red) _tval _tright:_zipper
@@ -174,7 +178,7 @@ zipperSearch' x = fix f
           RBFocus { _rbtree = _tright
                   , _zipper = RBZip (Right Red) _tval _tleft:_zipper
                   }
-      BNode RBNode {..} -> case compare x _tval of
+      BNode RBNode { .. } -> case compare x _tval of
         LT -> g
           RBFocus { _rbtree = _tleft
                   , _zipper = RBZip (Left Black) _tval _tright:_zipper

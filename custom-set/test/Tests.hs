@@ -1,3 +1,5 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
 
@@ -31,20 +33,44 @@ import Prelude hiding (null)
 import Test.Hspec (Spec, describe, it, shouldBe)
 import Test.Hspec.Runner (configFailFast, defaultConfig, hspecWith)
 import Test.QuickCheck
+import Data.Data (Proxy(..))
 
 main :: IO ()
 main = hspecWith defaultConfig { configFailFast = True } specs
 
+redBlackPredicates :: (Arbitrary a, Ord a, Show a) => [CustomSet a -> Bool]
+redBlackPredicates = [isBlack, orderRule, redRule, blackRule, heightRule]
+
+redBlackSuchThat :: forall a b. (Arbitrary b, Ord b, Show a, Show b)
+  => Gen a
+  -> (a -> CustomSet b)
+  -> Property
+redBlackSuchThat arbitrary' f = conjoin $ zipWith ($)
+  [ label "Root is black" . forAll arbitrary'
+  , label "Order rule" . forAll arbitrary'
+  , label "Red rule" . forAll arbitrary'
+  , label "Black rule" . forAll arbitrary'
+  , label "Height rule" . forAll arbitrary'
+  ] $ fmap (. f) redBlackPredicates
+
+redBlack :: forall a. (Arbitrary a, Ord a, Show a) => Property
+redBlack = redBlackSuchThat @[a] @a arbitrary fromList
+
+arbitraryDeletion :: (Arbitrary a, Ord a) => Gen (a, CustomSet a)
+arbitraryDeletion = do
+  list <- arbitrary
+  delendum <- elements list
+  return (delendum, fromList list)
+
+arbitraryInsertion :: (Arbitrary a, Ord a) => Gen (a, CustomSet a)
+arbitraryInsertion = do
+  list <- arbitrary
+  addendum <- suchThat arbitrary $ not . flip elem list
+  return (addendum, fromList list)
+
 specs :: Spec
 specs = do
   describe "standard tests" $ do
-    describe "Red-Black tree properties" $ do
-      it "Root is black" $ forAll arbitrary $ isBlack @Integer
-      it "Order rule" $ forAll arbitrary $ orderRule @Integer
-      it "Red rule" $ forAll arbitrary $ redRule @Integer
-      it "Black rule" $ forAll arbitrary $ blackRule @Integer
-      it "Height rule" $ forAll arbitrary $ heightRule @Integer
-
     describe "null" $ do
       it "sets with no elements are empty" $
         null (fromList ([] :: [Integer])) `shouldBe` True
@@ -206,3 +232,16 @@ specs = do
 
       it "a set doesn't keep repeated elements" $
         (sort . toList . fromList) [3, 1, 2, 1] `shouldBe` [1, 2, 3]
+
+    describe "Red-Black tree properties" $ do
+      it "Root is black" $ forAllShrink arbitrary shrink $ isBlack @Integer
+      it "Order rule" $ forAllShrink arbitrary shrink $ orderRule @Integer
+      it "Red rule" $ forAllShrink arbitrary shrink $ redRule @Integer
+      it "Black rule" $ forAllShrink arbitrary shrink $ blackRule @Integer
+      it "Height rule" $ forAllShrink arbitrary shrink $ heightRule @Integer
+      it "Red-black invariants hold after insertion" $
+        redBlackSuchThat @(Integer, CustomSet Integer) arbitraryInsertion $
+          uncurry insert
+      it "Red-black invariants hold after deletion" $
+        redBlackSuchThat @(Integer, CustomSet Integer) arbitraryDeletion $
+          uncurry delete
