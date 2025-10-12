@@ -238,8 +238,7 @@ delete x = evalState (del x) . makeFocus
     -}
     balance :: (Monad m) => RBFocusM a m (CustomSet a)
     balance = do
-      focus <- get
-      case focus of
+      get >>= \case
         -- |Red node: change the color to black and exit.
         RBFocus { _rbtree = RNode _ } -> rbtree %= makeBlack >> unzipFocus
         -- |Top of the tree.
@@ -261,9 +260,10 @@ delete x = evalState (del x) . makeFocus
             else do
               when (has (rbFar _direction . filtered isBlack) sibling') $
                 rbtree . rbFar _direction %=
-                  (makeRed
-                    -- >>> rbNear _direction %~ makeBlack
-                    >>> rotateThither _direction)
+                  -- |These two recolors are redundant.
+                  -- makeBlack
+                  -- >>> rbNear _direction %~ makeBlack
+                  rotateThither _direction
               color <- bool makeBlack makeRed . isRed <$> use rbtree
               rbtree %=
                 (makeBlack
