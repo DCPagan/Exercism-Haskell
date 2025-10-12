@@ -6,6 +6,7 @@
 -- {-# LANGUAGE OrPatterns #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RoleAnnotations #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 {-# LANGUAGE TypeApplications #-}
@@ -113,6 +114,7 @@ instance (Eq a) => Eq1 (RBTreeF a) where
 instance (Eq a, Eq b) => Eq (RBTreeF a b) where
   (==) = liftEq (==)
 
+type role CustomSet nominal
 data CustomSet a where
   RBNil :: CustomSet a
   RNode :: RBNode a (CustomSet a) -> CustomSet a
@@ -135,11 +137,17 @@ _rbBlack = prism' (maybe RBNil BNode) $ \case
   RNode _ -> Nothing
   BNode x -> Just $ Just x
 
-rbLeft :: Traversal' (CustomSet b) (CustomSet b)
+rbLeft :: Traversal' (CustomSet a) (CustomSet a)
 rbLeft = _rbnode . chosen . tleft
 
-rbRight :: Traversal' (CustomSet b) (CustomSet b)
+rbRight :: Traversal' (CustomSet a) (CustomSet a)
 rbRight = _rbnode . chosen . tright
+
+rbNear :: Either x x -> Traversal' (CustomSet a) (CustomSet a)
+rbNear = on either const rbLeft rbRight
+
+rbFar :: Either x x -> Traversal' (CustomSet a) (CustomSet a)
+rbFar = on either const rbRight rbLeft
 
 type instance Base (CustomSet a) = RBTreeF a
 
@@ -168,12 +176,12 @@ instance (Show a) => Show (CustomSet a) where
     where
       format :: (Show a) => RBTreeF a String -> String
       format = \case
-        RBNilF -> "nil"
-        RNodeF x -> "R" ++ formatNode x
-        BNodeF x -> "B" ++ formatNode x
+        RBNilF -> "_"
+        RNodeF x -> formatNode 'R' x
+        BNodeF x -> formatNode 'B' x
         where
-          formatNode RBNode {..} =
-            "[" ++ intercalate "," [_tleft, show _tval, _tright] ++ "]"
+          formatNode c RBNode {..} =
+            "[" ++ intercalate "," [_tleft, c:':':show _tval, _tright] ++ "]"
 
 {-|
   Only strictly increasing functions can be mapped over an ordered structure.

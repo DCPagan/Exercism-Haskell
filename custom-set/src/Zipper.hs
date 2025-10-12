@@ -1,8 +1,11 @@
 {-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RoleAnnotations #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -22,11 +25,14 @@ module Zipper
   , RBZipper
   , RBFocus(..)
   , RBFocusM
+  , RBFocusM'
   , rbtree
   , zipper
   , _rbSibling
   , goLeft
+  , goLeft'
   , goRight
+  , goRight'
   , goUp
   , sweepLeft
   , sweepRight
@@ -36,7 +42,7 @@ module Zipper
   , zipperSearch) where
 
 import Control.Lens
-import Control.Monad.State (StateT(..), gets, modify)
+import Control.Monad.State (MonadState, StateT(..), gets, modify)
 
 import Data.Foldable (Foldable(..))
 import Data.Function (fix)
@@ -60,6 +66,7 @@ data RBZipF a b where
     -> RBZipF a b
   deriving (Eq, Show, Functor, Foldable, Traversable)
 
+type role RBZip nominal
 data RBZip a where
   RBZip :: { _direction :: Direction, _val :: a, _sibling :: CustomSet a }
     -> RBZip a
@@ -69,11 +76,13 @@ makeLenses ''RBZip
 
 type RBZipper a = [RBZip a]
 
+type role RBFocus nominal
 data RBFocus a where
   RBFocus :: { _rbtree :: CustomSet a, _zipper :: RBZipper a } -> RBFocus a
   deriving (Show)
 
 type RBFocusM a = StateT (RBFocus a)
+class (MonadState (RBFocus a) m) => RBFocusM' a m
 
 makeLenses ''RBFocus
 
@@ -110,23 +119,22 @@ goRight' :: RBFocus a -> RBFocus a
 goRight' x@RBFocus { .. } = case _rbtree of
   RBNil -> x
   RNode RBNode { .. } -> RBFocus
-    { _rbtree = _tleft, _zipper = RBZip (Right Red) _tval _tright:_zipper }
+    { _rbtree = _tright, _zipper = RBZip (Right Red) _tval _tleft:_zipper }
   BNode RBNode { .. } -> RBFocus
-    { _rbtree = _tleft, _zipper = RBZip (Right Black) _tval _tright:_zipper }
+    { _rbtree = _tright, _zipper = RBZip (Right Black) _tval _tleft:_zipper }
 
 goRight :: (Monad m) => RBFocusM a m ()
 goRight = modify goRight'
 
 up :: CustomSet a -> RBZip a -> CustomSet a
-up _tright (RBZip (Left Red) _tval _tleft) = RNode RBNode { .. }
-up _tright (RBZip (Left Black) _tval _tleft) = BNode RBNode { .. }
-up _tleft (RBZip (Right Red) _tval _tright) = RNode RBNode { .. }
-up _tleft (RBZip (Right Black) _tval _tright) = BNode RBNode { .. }
+up _tleft (RBZip (Left Red) _tval _tright) = RNode RBNode { .. }
+up _tleft (RBZip (Left Black) _tval _tright) = BNode RBNode { .. }
+up _tright (RBZip (Right Red) _tval _tleft) = RNode RBNode { .. }
+up _tright (RBZip (Right Black) _tval _tleft) = BNode RBNode { .. }
 
 goUp' :: RBFocus a -> RBFocus a
 goUp' x@RBFocus {_zipper = []} = x
-goUp'
-  RBFocus {_zipper = z:_zipper, ..} = RBFocus { _rbtree = up _rbtree z, .. }
+goUp' RBFocus {_zipper = z:_zipper, ..} = RBFocus { _rbtree = up _rbtree z, .. }
 
 goUp :: (Monad m) => RBFocusM a m ()
 goUp = modify goUp'
@@ -142,20 +150,14 @@ sweepLeft' x@RBFocus { .. } = case _rbtree of
   RBNil -> x
   RNode RBNode { _tleft = RBNil } -> x
   BNode RBNode { _tleft = RBNil } -> x
-  RNode RBNode { .. } -> sweepLeft' RBFocus
-    { _rbtree = _tleft, _zipper = RBZip (Left Red) _tval _tright:_zipper }
-  BNode RBNode { .. } -> sweepLeft' RBFocus
-    { _rbtree = _tleft, _zipper = RBZip (Left Black) _tval _tright:_zipper }
+  _ -> sweepLeft' $ goLeft' x
 
 sweepRight' :: RBFocus a -> RBFocus a
 sweepRight' x@RBFocus { .. } = case _rbtree of
   RBNil -> x
   RNode RBNode { _tright = RBNil } -> x
   BNode RBNode { _tright = RBNil } -> x
-  RNode RBNode { .. } -> sweepRight' RBFocus
-    { _rbtree = _tright, _zipper = RBZip (Right Red) _tval _tleft:_zipper }
-  BNode RBNode { .. } -> sweepRight' RBFocus
-    { _rbtree = _tright, _zipper = RBZip (Right Black) _tval _tleft:_zipper }
+  _ -> sweepRight' $ goRight' x
 
 sweepLeft :: (Monad m) => RBFocusM a m ()
 sweepLeft = modify sweepLeft'
