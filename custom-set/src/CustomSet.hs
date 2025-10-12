@@ -223,7 +223,7 @@ delete x = evalState (del x) . makeFocus
           sweepLeft
           delendum <- use rbtree
           let _node@RBNode { .. } = delendum ^. singular _rbnode . chosen
-          zipper . traverse . filteredBy (val . only x) . val .= _tval
+          zipper . traverse . val . filteredBy (only x) .= _tval
           rbtree .= _tright
           return delendum
       if isBlack deleted
