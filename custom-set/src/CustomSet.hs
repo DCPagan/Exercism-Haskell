@@ -262,7 +262,7 @@ delete x = evalState (del x) . makeFocus
               when (has (rbFar _direction . filtered isBlack) sibling') $
                 rbtree . rbFar _direction %=
                   (makeRed
-                    >>> rbNear _direction %~ makeBlack
+                    -- >>> rbNear _direction %~ makeBlack
                     >>> rotateThither _direction)
               color <- bool makeBlack makeRed . isRed <$> use rbtree
               rbtree %=
