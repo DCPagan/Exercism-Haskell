@@ -54,5 +54,5 @@ triplet a b = (a, b, ) <$> maybeIntegral (pythagorean a b)
 
 tripletsWithSum :: Int -> [(Int, Int, Int)]
 tripletsWithSum n =
-  filter (\(a, b, _) -> a <= b) . mapMaybe (uncurry triplet <=< getPair n) $
+  filter (\(a, b, _) -> a < b) . mapMaybe (uncurry triplet <=< getPair n) $
   enumFromTo 1 $ div n 2
