@@ -36,17 +36,21 @@ data Frame where
   FinalThreeStrikes :: Frame
 
 instance Show Frame where
-  show = \case
-    Standard a b -> show a ++ ":" ++ show b
-    Spare s a -> show s ++ '(':show a ++ "/)"
-    Strike s -> show s ++ "(X)"
-    Final a b -> show a ++ ":" ++ show b
-    FinalSpare a b -> show a ++ "/" ++ show b
-    FinalStrike a b -> 'X':show a ++ ":" ++ show b
-    FinalSpareStrike a -> show a ++ "/X"
-    FinalStrikeSpare a -> 'X':show a ++ "/"
-    FinalTwoStrikes a -> "XX" ++ show a
-    FinalThreeStrikes -> "XXX"
+  showsPrec _ = \case
+    Standard a b -> shows (a + b) . ("(" ++) . shows a . (":" ++) . shows b
+      . (")" ++)
+    Spare s a -> shows s . ("(" ++) . shows a . ("/)" ++)
+    Strike s -> shows s . ("(X)" ++)
+    Final a b -> shows (a + b) . ("(" ++) . shows a . (":" ++) . shows b
+      . (")" ++)
+    FinalSpare a b -> shows (10 + b) . ("(" ++) . shows a . ("/" ++) . shows b
+      . (")" ++)
+    FinalStrike a b -> shows (10 + a + b) . ("(X" ++) . shows a . (":" ++)
+      . shows b . (")" ++)
+    FinalSpareStrike a -> ("20(" ++) . shows a . ("/X)" ++)
+    FinalStrikeSpare a -> ("20(X" ++) . shows a . ("/)" ++)
+    FinalTwoStrikes a -> shows (20 + a) . ("(XX" ++) . shows a . (")" ++)
+    FinalThreeStrikes -> ("30(XXX)" ++)
   showList = (++) . unwords . fmap show
 
 data BowlingF a where
