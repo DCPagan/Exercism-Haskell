@@ -25,8 +25,8 @@ import Data.Monoid
 
 data Frame where
   Standard :: Int -> Int -> Frame
-  Spare :: Int -> Frame
-  Strike :: Frame
+  Spare :: Int -> Int -> Frame
+  Strike :: Int -> Frame
   Final :: Int -> Int -> Frame
   FinalSpare :: Int -> Int -> Frame
   FinalStrike :: Int -> Int -> Frame
@@ -38,8 +38,8 @@ data Frame where
 instance Show Frame where
   show = \case
     Standard a b -> show a ++ ":" ++ show b
-    Spare a -> show a ++ "/"
-    Strike -> "X"
+    Spare s a -> show s ++ '(':show a ++ "/)"
+    Strike s -> show s ++ "(X)"
     Final a b -> show a ++ ":" ++ show b
     FinalSpare a b -> show a ++ "/" ++ show b
     FinalStrike a b -> 'X':show a ++ ":" ++ show b
@@ -162,13 +162,15 @@ rollExact x = do
 strike :: Bowling ()
 strike = do
   rollExact 10
-  frame Strike
+  points <- (10 +) . sum . take 2 <$> peek
+  frame $ Strike points
 
 spare :: Bowling ()
 spare = do
   rollValue <- snd <$> rollMax 9
   rollExact (10 - rollValue)
-  frame $ Spare rollValue
+  points <- (10 +) . sum . take 1 <$> peek
+  frame $ Spare points rollValue
 
 standard :: Bowling ()
 standard = do
@@ -264,21 +266,35 @@ execBowlingF game rollIndex rolls = fst <$> runBowlingF game rollIndex rolls
 execBowling :: Bowling () -> Int -> [Int] -> Either BowlingError [Frame]
 execBowling = execBowlingF . lowerCodensity
 
+frameScore :: Frame -> Int
+frameScore = \case
+  Standard a b -> a + b
+  Spare s _ -> s
+  Strike s -> s
+  Final a b -> a + b
+  FinalSpare _ b -> 10 + b
+  FinalStrike a b -> 10 + a + b
+  FinalSpareStrike _ -> 20
+  FinalStrikeSpare _ -> 20
+  FinalTwoStrikes a -> 20 + a
+  FinalThreeStrikes -> 30
+
+
 -- |Evaluate the frames to a score.
 evalFrames :: [Frame] -> Int
 evalFrames = snd . foldr f ([], 0)
   where
-    f frame' (rolls, s) = case frame' of
-      Standard a b -> (a:b:rolls, s + a + b)
-      Spare a -> (a:10 - a:rolls, s + 10 + sum (take 1 rolls))
-      Strike -> (10:rolls, s + 10 + sum (take 2 rolls))
-      Final a b -> (a:b:rolls, s + a + b)
-      FinalSpare a b -> (a:10 - a:b:rolls, s + 10 + b)
-      FinalStrike a b -> (10:a:b:rolls, s + 10 + a + b)
-      FinalSpareStrike a -> (a:10 - a:10:rolls, s + 20)
-      FinalStrikeSpare a -> (10:a:10 - a:rolls, s + 20)
-      FinalTwoStrikes a -> (10:10:a:rolls, s + 20 + a)
-      FinalThreeStrikes -> (10:10:10:rolls, s + 30)
+    f frame' (rolls, total) = case frame' of
+      Standard a b -> (a:b:rolls, total + a + b)
+      Spare s a -> (a:10 - a:rolls, total + s)
+      Strike s -> (10:rolls, total + s)
+      Final a b -> (a:b:rolls, total + a + b)
+      FinalSpare a b -> (a:10 - a:b:rolls, total + 10 + b)
+      FinalStrike a b -> (10:a:b:rolls, total + 10 + a + b)
+      FinalSpareStrike a -> (a:10 - a:10:rolls, total + 20)
+      FinalStrikeSpare a -> (10:a:10 - a:rolls, total + 20)
+      FinalTwoStrikes a -> (10:10:a:rolls, total + 20 + a)
+      FinalThreeStrikes -> (10:10:10:rolls, total + 30)
 
 data BowlingError
   = IncompleteGame
