@@ -266,6 +266,7 @@ execBowlingF game rollIndex rolls = fst <$> runBowlingF game rollIndex rolls
 execBowling :: Bowling () -> Int -> [Int] -> Either BowlingError [Frame]
 execBowling = execBowlingF . lowerCodensity
 
+-- |Evaluate the frames to a score.
 frameScore :: Frame -> Int
 frameScore = \case
   Standard a b -> a + b
@@ -279,22 +280,8 @@ frameScore = \case
   FinalTwoStrikes a -> 20 + a
   FinalThreeStrikes -> 30
 
-
--- |Evaluate the frames to a score.
 evalFrames :: [Frame] -> Int
-evalFrames = snd . foldr f ([], 0)
-  where
-    f frame' (rolls, total) = case frame' of
-      Standard a b -> (a:b:rolls, total + a + b)
-      Spare s a -> (a:10 - a:rolls, total + s)
-      Strike s -> (10:rolls, total + s)
-      Final a b -> (a:b:rolls, total + a + b)
-      FinalSpare a b -> (a:10 - a:b:rolls, total + 10 + b)
-      FinalStrike a b -> (10:a:b:rolls, total + 10 + a + b)
-      FinalSpareStrike a -> (a:10 - a:10:rolls, total + 20)
-      FinalStrikeSpare a -> (10:a:10 - a:rolls, total + 20)
-      FinalTwoStrikes a -> (10:10:a:rolls, total + 20 + a)
-      FinalThreeStrikes -> (10:10:10:rolls, total + 30)
+evalFrames = getSum . foldMap (Sum . frameScore)
 
 data BowlingError
   = IncompleteGame
