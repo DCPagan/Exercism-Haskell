@@ -68,13 +68,6 @@ instance (Read a) => Read (Matrix a) where
   readPrec = lift matrix
 
 instance (Show a) => Show (Matrix a) where
-  {-
-  show Matrix { .. } = unlines $ do
-    y <- enumFromTo 0 $ pred _len
-    return $ unwords $ do
-      x <- enumFromTo 0 $ pred _wid
-      return $ show $ _vec V.! (_wid * y + x)
-  -}
   show =
     unlines . fmap unwords . transposeList . fmap (padColumn . fmap show)
     . toColumns
