@@ -27,7 +27,11 @@ module Matrix
 import Control.Arrow (Arrow(..))
 import Control.Monad
 
+import Data.Foldable
 import Data.List hiding (transpose)
+import Data.Maybe
+import Data.Monoid
+import Data.Semigroup
 import qualified Data.Vector as V
 import Data.Vector (Vector)
 
@@ -52,7 +56,10 @@ matrix = do
   -- |Check that all rows have the same width.
   case uncons widths of
     Just (_wid:_, []) -> do
-      let _len = if _wid == 0 then 0 else length rs
+      let _len =
+            if _wid == 0
+              then 0
+              else length rs
           _vec = V.fromList $ join rs
       return Matrix { .. }
     _ -> pfail
@@ -61,11 +68,45 @@ instance (Read a) => Read (Matrix a) where
   readPrec = lift matrix
 
 instance (Show a) => Show (Matrix a) where
+  {-
   show Matrix { .. } = unlines $ do
     y <- enumFromTo 0 $ pred _len
     return $ unwords $ do
       x <- enumFromTo 0 $ pred _wid
       return $ show $ _vec V.! (_wid * y + x)
+  -}
+  show =
+    unlines . fmap unwords . transposeList . fmap (padColumn . fmap show)
+    . toColumns
+    where
+      toDoubleList Matrix { .. } = do
+        y <- enumFromTo 0 $ pred _len
+        return $ do
+          x <- enumFromTo 0 $ pred _wid
+          return $ show $ _vec V.! (_wid * y + x)
+
+      padColumn :: [String] -> [String]
+      padColumn = maxLength >>= fmap . pad
+
+      pad :: Int -> String -> String
+      pad l s = replicate (l - length s) ' ' ++ s
+
+      maxLength :: [[b]] -> Int
+      maxLength = getMax . fromMaybe 0 . foldMap (Just . Max . length)
+
+toRows :: Matrix a -> [[a]]
+toRows Matrix { .. } = do
+  y <- enumFromTo 0 $ pred _len
+  return $ do
+    x <- enumFromTo 0 $ pred _wid
+    return $ _vec V.! (_wid * y + x)
+
+toColumns :: Matrix a -> [[a]]
+toColumns = toRows . transpose
+
+transposeList :: [[a]] -> [[a]]
+transposeList =
+  maybe [] (uncurry (:) . second transposeList . unzip) . traverse uncons
 
 cols :: Matrix a -> Int
 cols = _wid
