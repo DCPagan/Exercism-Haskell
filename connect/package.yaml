@@ -4,6 +4,8 @@ version: 1.1.0.6
 dependencies:
   - base
   - array
+  - free
+  - mtl
 
 library:
   exposed-modules: Connect
