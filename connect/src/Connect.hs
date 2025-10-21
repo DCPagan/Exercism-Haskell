@@ -12,20 +12,27 @@ module Connect (Mark(..), winner) where
 
 import Control.Applicative (Alternative(..), Applicative(..))
 import Control.Arrow (Arrow(..))
-import Control.Monad
-import Control.Monad.Free
-import Control.Monad.ST
+import Control.Monad (MonadPlus, guard, join, replicateM_, void)
+import Control.Monad.Free (MonadFree(..))
+import Control.Monad.ST (ST, runST)
 import Control.Monad.Trans (MonadTrans(..))
 
 import Data.Array.IArray
-import Data.Array.MArray
-import Data.Array.ST
+  ( (!)
+  , Array
+  , IArray(bounds)
+  , Ix(inRange, range)
+  , array
+  , assocs
+  , listArray)
+import Data.Array.MArray (MArray, newListArray, readArray, writeArray)
+import Data.Array.ST (STArray)
 import Data.Function (on)
 import Data.Functor.Identity (Identity, runIdentity)
 import Data.List (groupBy, intersperse, singleton, uncons)
 import Data.Maybe (fromMaybe)
 
-import Text.ParserCombinators.ReadP hiding (many)
+import Text.ParserCombinators.ReadP (ReadP, char, eof, get, pfail, sepBy)
 import qualified Text.ParserCombinators.ReadPrec as R
 import Text.Read (Read(..), readMaybe)
 
@@ -43,9 +50,6 @@ newtype ListT m a = ListT { runListT :: m [a] }
 
 type List = ListT Identity
 
-runList :: List a -> [a]
-runList = runIdentity . runListT
-
 instance Functor m => Functor (ListT m) where
   fmap f = ListT . fmap (fmap f) . runListT
 
@@ -58,10 +62,7 @@ instance Monad m => Monad (ListT m) where
 
 instance Monad m => Alternative (ListT m) where
   empty = ListT $ pure []
-  ListT m <|> ListT n = ListT do
-    a <- m
-    b <- n
-    return $ a <|> b
+  ListT m <|> ListT n = ListT $ liftA2 (<|>) m n
 
 instance Monad m => MonadPlus (ListT m)
 
@@ -70,6 +71,9 @@ instance MonadTrans ListT where
 
 instance Monad m => MonadFree [] (ListT m) where
   wrap = ListT . fmap join . traverse runListT
+
+runList :: List a -> [a]
+runList = runIdentity . runListT
 
 toMark :: Char -> Maybe Mark
 toMark = \case
@@ -175,12 +179,12 @@ adjacents (i, j) =
   , (succ i, j)
   ]
 
-walk' :: MArray a Mark m
+walk' :: (MonadTrans t, MonadFree [] (t m), Alternative (t m), MArray a Mark m)
   => Hex
   -> HexM m a
   -> Mark
   -> (Int, Int)
-  -> ListT m [(Int, Int)]
+  -> t m [(Int, Int)]
 walk' h hm m loc = do
   let hexBounds = bounds h
   guard $ inRange hexBounds loc
@@ -206,7 +210,8 @@ winner board = runST do
     ST s (STArray s (Int, Int) Mark)
   crossWitnesses <- walk hexBoard activeHex Cross
   noughtWitnesses <- walk hexBoard activeHex Nought
-  return $ if
-    | not $ null crossWitnesses -> Just Cross
-    | not $ null noughtWitnesses -> Just Nought
-    | otherwise -> Nothing
+  return
+    if
+      | not $ null crossWitnesses -> Just Cross
+      | not $ null noughtWitnesses -> Just Nought
+      | otherwise -> Nothing
